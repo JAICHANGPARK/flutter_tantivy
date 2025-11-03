@@ -117,6 +117,9 @@ pub fn search_documents(query: String, top_k: usize) -> Result<Vec<SearchResult>
     let state_lock = STATE.lock().unwrap();
     let api = state_lock.as_ref().ok_or_else(|| anyhow!("Tantivy not initialized"))?;
 
+    // reader를 리로드하여 최신 변경사항을 반영
+    api.reader.reload()?;
+
     // 전역 reader 재사용
     let searcher = api.reader.searcher();
 
