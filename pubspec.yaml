@@ -1,7 +1,7 @@
 name: flutter_tantivy
-description: "A new Flutter FFI plugin project."
+description: "A Flutter plugin for full-text search powered by Tantivy"
 version: 0.0.1
-homepage:
+homepage: https://github.com/JAICHANGPARK/flutter_tantivy
 
 environment:
   sdk: ^3.9.2
