@@ -101,11 +101,30 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
   Future<void> _addSampleDocuments() async {
     try {
       final sampleDocs = [
-        const Document(id: '1', text: 'Flutter is an open-source UI software development kit created by Google'),
-        const Document(id: '2', text: 'Rust is a multi-paradigm programming language focused on safety and performance'),
-        const Document(id: '3', text: 'Tantivy is a full-text search engine library written in Rust'),
-        const Document(id: '4', text: 'Flutter uses Dart programming language for building mobile applications'),
-        const Document(id: '5', text: 'Flutter Rust Bridge enables Flutter apps to call Rust code efficiently'),
+        const Document(
+            id: '1',
+            title: 'Flutter UI Framework',
+            text:
+                'Flutter is an open-source UI software development kit created by Google'),
+        const Document(
+            id: '2',
+            title: 'Rust Systems Language',
+            text:
+                'Rust is a multi-paradigm programming language focused on safety and performance'),
+        const Document(
+            id: '3',
+            title: 'Tantivy Engine',
+            text: 'Tantivy is a full-text search engine library written in Rust'),
+        const Document(
+            id: '4',
+            title: 'Dart Language',
+            text:
+                'Flutter uses Dart programming language for building mobile applications'),
+        const Document(
+            id: '5',
+            title: 'Flutter Rust Bridge',
+            text:
+                'Flutter Rust Bridge enables Flutter apps to call Rust code efficiently'),
       ];
 
       await addDocumentsBatch(docs: sampleDocs);
@@ -129,14 +148,16 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
     }
 
     try {
-      final results = await searchDocuments(
+      final response = await searchDocuments(
         query: _searchController.text,
         topK: BigInt.from(10),
+        enableSnippet: true,
       );
 
       setState(() {
-        _searchResults = results;
-        _statusMessage = 'Found ${results.length} results';
+        _searchResults = response.results;
+        _statusMessage =
+            'Found ${response.results.length} (Total matching: ${response.totalHits})';
       });
     } catch (e) {
       setState(() {
@@ -347,14 +368,29 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
                               child: Text('${index + 1}'),
                             ),
                             title: Text(
-                              'ID: ${result.doc.id}',
-                              style: const TextStyle(fontWeight: FontWeight.bold),
+                              result.doc.title != null &&
+                                      result.doc.title!.isNotEmpty
+                                  ? '[ID: ${result.doc.id}] ${result.doc.title}'
+                                  : 'ID: ${result.doc.id}',
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold),
                             ),
                             subtitle: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const SizedBox(height: 4),
                                 Text(result.doc.text),
+                                if (result.snippet != null &&
+                                    result.snippet!.isNotEmpty) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Snippet: ${result.snippet}',
+                                    style: TextStyle(
+                                      color: Colors.purple.shade700,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                ],
                                 const SizedBox(height: 4),
                                 Text(
                                   'Score: ${result.score.toStringAsFixed(4)}',

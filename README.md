@@ -1,28 +1,29 @@
 # flutter_tantivy
 
-A Flutter plugin for full-text search powered by [Tantivy](https://github.com/quickwit-oss/tantivy), a fast full-text search engine library written in Rust. This plugin uses [flutter_rust_bridge](https://github.com/fzyzcjy/flutter_rust_bridge) to provide high-performance native search capabilities to Flutter applications.
+A Flutter plugin for full-text search powered by [Tantivy 0.26](https://github.com/quickwit-oss/tantivy), a fast full-text search engine library written in Rust. This plugin uses [flutter_rust_bridge 2.12](https://github.com/fzyzcjy/flutter_rust_bridge) to provide high-performance native search capabilities to Flutter applications.
 
 [![pub package](https://img.shields.io/pub/v/flutter_tantivy.svg)](https://pub.dev/packages/flutter_tantivy)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Features
 
-- 🚀 **High Performance**: Native Rust implementation with efficient indexing and searching
-- 🔍 **Full-Text Search**: Advanced search capabilities with query parsing
-- 💾 **Persistent Storage**: Index data persists across app sessions
-- 🔄 **CRUD Operations**: Complete create, read, update, and delete operations
-- 📦 **Batch Operations**: Efficient batch insertions and deletions
-- 🎯 **Relevance Scoring**: Search results ordered by relevance score
+- 🚀 **High Performance**: Powered by Tantivy 0.26.1 Rust search engine with efficient indexing and searching
+- 🔍 **Full-Text & Regex Search**: Support for standard text queries, boolean logic, wildcards, and regex pattern searches (`searchDocumentsRegex`)
+- 🌏 **CJK Language Support**: Built-in N-gram tokenizer (`tokenizerType: 'cjk'`) for Chinese, Japanese, and Korean text tokenization and substring matching
+- 📄 **Pagination & Total Hits**: Support for `offset` pagination and retrieving total matching document counts
+- 💡 **Search Snippets & Highlighting**: Extract HTML-formatted highlighted snippets of matched search query terms
+- 💾 **Persistent Storage**: Disk-based persistent index storage across app sessions
+- 🔄 **CRUD & Bulk Operations**: Single & batch document creation, retrieval, updates, deletion, and index clearing
 - 🔒 **Thread-Safe**: Safe concurrent access to the search index
 - 📱 **Cross-Platform**: Supports Android, iOS, macOS, Linux, and Windows
 
 ## Installation
 
-Add this to your package's `pubspec.yaml` file:
+Add `flutter_tantivy` to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  flutter_tantivy: ^0.1.0
+  flutter_tantivy: ^2026.7.26
 ```
 
 Then run:
@@ -42,111 +43,113 @@ import 'package:path_provider/path_provider.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Rust library
+  // Initialize Rust FFI bridge
   await RustLib.init();
 
-  // Initialize Tantivy index
+  // Initialize Tantivy index (pass tokenizerType: 'cjk' for Korean/Chinese/Japanese support)
   final directory = await getApplicationDocumentsDirectory();
   final indexPath = '${directory.path}/tantivy_index';
-  initTantivy(dirPath: indexPath);
+  initTantivy(dirPath: indexPath, tokenizerType: 'cjk');
 
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 ```
 
 ### 2. Add Documents
 
 ```dart
-// Add a single document
+// Add a single document with optional title
 final doc = Document(
   id: '1',
+  title: 'Flutter Framework',
   text: 'Flutter is an open-source UI toolkit by Google',
 );
 await addDocument(doc: doc);
 
 // Batch add documents (more efficient)
 final docs = [
-  Document(id: '1', text: 'Flutter is a UI toolkit'),
-  Document(id: '2', text: 'Rust is a systems programming language'),
-  Document(id: '3', text: 'Tantivy is a search engine library'),
+  const Document(
+    id: '1',
+    title: 'Flutter UI',
+    text: 'Flutter is a UI toolkit for building natively compiled apps',
+  ),
+  const Document(
+    id: '2',
+    title: 'Rust Language',
+    text: 'Rust is a systems programming language focused on safety',
+  ),
+  const Document(
+    id: '3',
+    title: 'Tantivy Search',
+    text: 'Tantivy is a full-text search engine library written in Rust',
+  ),
 ];
 await addDocumentsBatch(docs: docs);
 ```
 
-### 3. Search Documents
+### 3. Search Documents with Pagination & Snippets
 
 ```dart
-final results = await searchDocuments(
+final response = await searchDocuments(
   query: 'Flutter OR Rust',
   topK: BigInt.from(10),
+  offset: BigInt.from(0),        // Optional: for pagination
+  enableSnippet: true,            // Optional: generate highlighted text snippets
 );
 
-for (final result in results) {
+print('Total matching documents: ${response.totalHits}');
+
+for (final result in response.results) {
   print('Score: ${result.score}');
   print('ID: ${result.doc.id}');
+  print('Title: ${result.doc.title}');
   print('Text: ${result.doc.text}');
+  if (result.snippet != null) {
+    print('Snippet: ${result.snippet}'); // e.g. "<b>Flutter</b> is a UI..."
+  }
 }
 ```
 
-### 4. Get Document by ID
+### 4. Regex Search
 
 ```dart
-final doc = getDocumentById(id: '1');
-if (doc != null) {
-  print('Found: ${doc.text}');
-}
-```
-
-### 5. Update Document
-
-```dart
-final updatedDoc = Document(
-  id: '1',
-  text: 'Flutter is an open-source UI toolkit created by Google',
+// Search using regular expressions across title and text
+final regexResponse = await searchDocumentsRegex(
+  pattern: 'Flutter.*',
+  topK: BigInt.from(10),
 );
-await updateDocument(doc: updatedDoc);
+print('Regex matches count: ${regexResponse.totalHits}');
 ```
 
-### 6. Delete Document
+### 5. Index Statistics, Cleaning & Release
 
 ```dart
-// Delete single document
-await deleteDocument(id: '1');
+// Get total document count in index
+final count = getNumDocs();
+print('Indexed Documents: $count');
 
-// Batch delete documents
-await deleteDocumentsBatch(ids: ['1', '2', '3']);
+// Delete all documents in index
+await deleteAllDocuments();
+
+// Close and release Tantivy resources (optional)
+closeTantivy();
 ```
-
-## Advanced Usage
-
-### Manual Transaction Control
-
-For advanced users who need fine-grained control over commits:
-
-```dart
-// Add documents without committing
-await addDocumentNoCommit(doc: doc1);
-await addDocumentNoCommit(doc: doc2);
-await deleteDocumentNoCommit(id: 'old_id');
-
-// Manually commit all changes
-commit();
-```
-
-This is useful when you need to perform multiple operations atomically.
 
 ## API Reference
 
-### Initialization
+### Initialization & Info
 
 - `initTantivy({required String dirPath})` - Initialize or open a Tantivy index at the specified directory
+- `getNumDocs()` - Synchronously returns the total count of indexed documents
+- `closeTantivy()` - Safely release and close Tantivy resources
 
 ### CRUD Operations
 
-- `addDocument({required Document doc})` - Add a single document (auto-commits)
+- `addDocument({required Document doc})` - Add or update a single document (auto-commits)
 - `getDocumentById({required String id})` - Retrieve a document by its ID (synchronous)
 - `updateDocument({required Document doc})` - Update an existing document
 - `deleteDocument({required String id})` - Delete a document by ID
+- `deleteAllDocuments()` - Delete all documents in the index
 
 ### Batch Operations
 
@@ -155,7 +158,7 @@ This is useful when you need to perform multiple operations atomically.
 
 ### Search Operations
 
-- `searchDocuments({required String query, required BigInt topK})` - Search documents with a query string
+- `searchDocuments({required String query, required BigInt topK, BigInt? offset, bool? enableSnippet})` - Search documents returning a `SearchResponse` containing total hits, matching results, and optional search snippets.
 
 ### Advanced Operations
 
@@ -168,83 +171,67 @@ This is useful when you need to perform multiple operations atomically.
 #### Document
 ```dart
 class Document {
-  final String id;    // Unique identifier
-  final String text;  // Searchable text content
+  final String id;          // Unique identifier
+  final String? title;      // Optional document title
+  final String text;        // Searchable body text content
+
+  const Document({required this.id, this.title, required this.text});
+}
+```
+
+#### SearchResponse
+```dart
+class SearchResponse {
+  final BigInt totalHits;            // Total matching documents count across all pages
+  final List<SearchResult> results;  // Search results list for current page
 }
 ```
 
 #### SearchResult
 ```dart
 class SearchResult {
-  final double score;      // Relevance score
-  final Document doc;      // The matched document
+  final double score;       // Relevance score (BM25)
+  final Document doc;       // The matched document
+  final String? snippet;    // HTML snippet highlighting search terms
 }
 ```
 
 ## Query Syntax
 
-Tantivy supports a rich query syntax:
+Tantivy supports a rich query syntax matching across `title` and `text`:
 
 - **Term search**: `flutter`
 - **Phrase search**: `"flutter framework"`
 - **Boolean operators**: `flutter AND dart`, `ios OR android`
 - **Negation**: `flutter NOT web`
-- **Field search**: `text:flutter` (when using custom schemas)
+- **Field search**: `title:flutter` or `text:rust`
 - **Wildcard**: `flut*`
-
-## Performance Tips
-
-1. **Use Batch Operations**: When adding or deleting multiple documents, use `addDocumentsBatch` and `deleteDocumentsBatch` instead of individual operations
-2. **Manual Commits**: For bulk operations, use `addDocumentNoCommit` and call `commit()` once at the end
-3. **Index Location**: Store the index on local storage, not in temporary directories
-4. **Query Optimization**: Keep queries simple and specific for better performance
 
 ## Platform-Specific Setup
 
 ### Android
-
-Add the following to your `android/app/build.gradle`:
-
+Set minimum NDK version in `android/app/build.gradle`:
 ```gradle
 android {
-    ndkVersion "25.1.8937393"  // or higher
+    ndkVersion "25.1.8937393" // or higher
 }
 ```
 
-### iOS
+### iOS / macOS
+- Minimum iOS version: `11.0`
+- Minimum macOS version: `10.11`
 
-Minimum iOS version: 11.0
+## Example App
 
-### macOS
-
-Minimum macOS version: 10.11
-
-## Example
-
-Check out the [example](example) directory for a complete working demo app that demonstrates all the features of this plugin.
+Check out the [example](example) directory for an interactive Flutter application demonstrating all features.
 
 ## Architecture
 
 This plugin uses:
-- **Rust** for the core search engine implementation (Tantivy)
-- **flutter_rust_bridge** for seamless Dart-Rust interop
-- **FFI** for native performance
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+- **Rust** for core search engine logic (Tantivy 0.26.1)
+- **flutter_rust_bridge 2.12** for type-safe Dart-Rust FFI interop
+- **Cargokit** for seamless multi-platform native build & bundling
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- [Tantivy](https://github.com/quickwit-oss/tantivy) - The amazing full-text search engine
-- [flutter_rust_bridge](https://github.com/fzyzcjy/flutter_rust_bridge) - For making Rust-Flutter integration seamless
-
-## Support
-
-If you find this package useful, please consider giving it a ⭐ on [GitHub](https://github.com/yourusername/flutter_tantivy)!
-
-For bugs and feature requests, please file an issue on the [GitHub issue tracker](https://github.com/yourusername/flutter_tantivy/issues).

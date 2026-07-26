@@ -2,8 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+
+## [2026.7.26] - 2026-07-26
+
+### Added
+- **Regex Search Support (`searchDocumentsRegex`)**: Added support for searching documents using regular expression patterns (`RegexQuery`). (Addresses Issue #1)
+- **CJK / Multi-language Tokenizer (`tokenizerType: 'cjk'`)**: Added N-gram tokenizer option during `initTantivy` for Chinese, Japanese, and Korean (CJK) text tokenization and substring search. (Addresses Issues #2, #3, #4)
+- **Search Snippets & Highlighting (`snippet`)**: Added search term highlighting using Tantivy's `SnippetGenerator`. Returns HTML-formatted snippets (e.g. `<b>Flutter</b> is a UI...`).
+- **Pagination Support (`offset`)**: Added `offset` parameter to `searchDocuments` for paginated search results.
+- **Total Hits Count (`totalHits`)**: `searchDocuments` now returns a `SearchResponse` containing total matching documents count (`totalHits`) and page results.
+- **Document Title Support (`title`)**: Added optional `title` field to `Document`. Searching matches across both `title` and `text` fields.
+- **Get Total Document Count (`getNumDocs()`)**: Added synchronous function to retrieve total number of indexed documents.
+- **Delete All Documents (`deleteAllDocuments()`)**: Added function to clear all documents from the search index.
+- **Close Tantivy (`closeTantivy()`)**: Added function to safely close and reset Tantivy resources.
+
+### Changed
+- **Date-Based Versioning (CalVer)**: Switched package versioning strategy to date-based versioning (`2026.7.26`).
+- **Tantivy Upgrade**: Upgraded Tantivy engine from `0.25.0` to **`0.26.1`**.
+- **flutter_rust_bridge Upgrade**: Upgraded `flutter_rust_bridge` from `2.11.1` to **`2.12.0`**.
+
+---
 
 ## [0.1.0] - 2025-11-03
 
@@ -36,98 +55,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - macOS (10.11+)
   - Linux
   - Windows
-- Comprehensive example app demonstrating all features
-- Complete documentation and API reference
-
-### Technical Details
-- Built with Rust for native performance
-- Integration via flutter_rust_bridge 2.11.1
-- Tantivy search engine for fast indexing and querying
-- FFI-based implementation for optimal performance
-- Persistent storage with automatic index management
-
-### Documentation
-- Comprehensive README with quick start guide
-- Example app with interactive UI
-- API reference documentation
-- Performance optimization tips
-- Query syntax documentation
-
-## [Unreleased]
-
-### Planned Features
-- Custom schema support for multiple field types
-- Faceted search capabilities
-- Fuzzy search support
-- Highlighting of search results
-- Index optimization and maintenance APIs
-- Real-time search suggestions
-- Multi-language tokenizer support
-- Advanced query builder API
-
----
-
-## Version History
-
-### [0.1.0] - 2025-11-03
-- Initial public release
-
----
-
-## Migration Guide
-
-### From Template
-If you're migrating from the flutter_rust_bridge template:
-
-1. Update your `pubspec.yaml`:
-```yaml
-dependencies:
-  flutter_tantivy: ^0.1.0
-```
-
-2. Initialize the library:
-```dart
-await RustLib.init();
-initTantivy(dirPath: yourIndexPath);
-```
-
-3. Replace template API calls with Tantivy API calls
-
----
-
-## Breaking Changes
-
-None yet - this is the initial release.
-
----
-
-## Known Issues
-
-None at this time.
-
-For bug reports and feature requests, please visit:
-https://github.com/yourusername/flutter_tantivy/issues
-
----
-
-## Contributors
-
-- Initial implementation and design
-- Tantivy Rust library integration
-- Flutter binding generation
-- Example application development
-
-Thank you to all contributors who made this project possible!
-
----
-
-## Support
-
-For questions and support:
-- GitHub Issues: https://github.com/yourusername/flutter_tantivy/issues
-- Documentation: See README.md
-- Example: See example directory
-
----
-
-*Note: This project uses [flutter_rust_bridge](https://github.com/fzyzcjy/flutter_rust_bridge) for Dart-Rust interoperability and [Tantivy](https://github.com/quickwit-oss/tantivy) for search engine capabilities.*
