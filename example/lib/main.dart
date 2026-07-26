@@ -16,8 +16,12 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Flutter Tantivy Demo',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.deepPurple,
+          brightness: Brightness.light,
+        ),
         useMaterial3: true,
       ),
       home: const TantivyDemoPage(),
@@ -34,12 +38,16 @@ class TantivyDemoPage extends StatefulWidget {
 
 class _TantivyDemoPageState extends State<TantivyDemoPage> {
   final TextEditingController _idController = TextEditingController();
+  final TextEditingController _titleController = TextEditingController();
   final TextEditingController _textController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
 
   List<SearchResult> _searchResults = [];
   String _statusMessage = 'Ready';
   bool _isInitialized = false;
+  bool _useRegexSearch = false;
+  String _tokenizerType = 'cjk';
+  BigInt _totalDocCount = BigInt.zero;
 
   @override
   void initState() {
@@ -52,14 +60,15 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
       final directory = await getApplicationDocumentsDirectory();
       final indexPath = '${directory.path}/tantivy_index';
 
-      // 디렉토리 생성
       await Directory(indexPath).create(recursive: true);
 
-      // Tantivy 초기화
-      initTantivy(dirPath: indexPath);
+      // Initialize Tantivy with CJK / N-gram tokenizer support by default
+      initTantivy(dirPath: indexPath, tokenizerType: _tokenizerType);
+      _updateDocCount();
 
       setState(() {
-        _statusMessage = 'Tantivy initialized at: $indexPath';
+        _statusMessage =
+            'Tantivy initialized ($dirPath: $indexPath, Tokenizer: $_tokenizerType)';
         _isInitialized = true;
       });
     } catch (e) {
@@ -69,10 +78,19 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
     }
   }
 
+  void _updateDocCount() {
+    try {
+      final count = getNumDocs();
+      setState(() {
+        _totalDocCount = count;
+      });
+    } catch (_) {}
+  }
+
   Future<void> _addDocument() async {
     if (_idController.text.isEmpty || _textController.text.isEmpty) {
       setState(() {
-        _statusMessage = 'Please enter both ID and text';
+        _statusMessage = 'Please enter both ID and Text';
       });
       return;
     }
@@ -80,16 +98,19 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
     try {
       final doc = Document(
         id: _idController.text,
+        title: _titleController.text.isNotEmpty ? _titleController.text : null,
         text: _textController.text,
       );
 
       await addDocument(doc: doc);
+      _updateDocCount();
 
       setState(() {
-        _statusMessage = 'Document added: ${doc.id}';
+        _statusMessage = 'Document added: [${doc.id}]';
       });
 
       _idController.clear();
+      _titleController.clear();
       _textController.clear();
     } catch (e) {
       setState(() {
@@ -102,35 +123,39 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
     try {
       final sampleDocs = [
         const Document(
-            id: '1',
-            title: 'Flutter UI Framework',
-            text:
-                'Flutter is an open-source UI software development kit created by Google'),
+          id: '1',
+          title: 'Flutter UI Framework',
+          text:
+              'Flutter is an open-source UI software development kit created by Google.',
+        ),
         const Document(
-            id: '2',
-            title: 'Rust Systems Language',
-            text:
-                'Rust is a multi-paradigm programming language focused on safety and performance'),
+          id: '2',
+          title: 'Rust Systems Language',
+          text:
+              'Rust is a multi-paradigm programming language focused on safety and performance.',
+        ),
         const Document(
-            id: '3',
-            title: 'Tantivy Engine',
-            text: 'Tantivy is a full-text search engine library written in Rust'),
+          id: '3',
+          title: 'Tantivy Engine',
+          text: 'Tantivy is a full-text search engine library written in Rust.',
+        ),
         const Document(
-            id: '4',
-            title: 'Dart Language',
-            text:
-                'Flutter uses Dart programming language for building mobile applications'),
+          id: '4',
+          title: '플러터 전문 검색 엔진',
+          text: 'Tantivy 기반의 고성능 Flutter 전문 검색 라이브러리입니다.',
+        ),
         const Document(
-            id: '5',
-            title: 'Flutter Rust Bridge',
-            text:
-                'Flutter Rust Bridge enables Flutter apps to call Rust code efficiently'),
+          id: '5',
+          title: '한국어 N-gram 토큰화',
+          text: '한글, 중국어, 일본어 텍스트 및 부분 문자열 검색을 완벽하게 지원합니다.',
+        ),
       ];
 
       await addDocumentsBatch(docs: sampleDocs);
+      _updateDocCount();
 
       setState(() {
-        _statusMessage = 'Added ${sampleDocs.length} sample documents';
+        _statusMessage = 'Added ${sampleDocs.length} sample documents (English & CJK)';
       });
     } catch (e) {
       setState(() {
@@ -142,17 +167,26 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
   Future<void> _searchDocuments() async {
     if (_searchController.text.isEmpty) {
       setState(() {
-        _statusMessage = 'Please enter search query';
+        _statusMessage = 'Please enter search query or regex pattern';
       });
       return;
     }
 
     try {
-      final response = await searchDocuments(
-        query: _searchController.text,
-        topK: BigInt.from(10),
-        enableSnippet: true,
-      );
+      final SearchResponse response;
+      if (_useRegexSearch) {
+        response = await searchDocumentsRegex(
+          pattern: _searchController.text,
+          topK: BigInt.from(10),
+          enableSnippet: true,
+        );
+      } else {
+        response = await searchDocuments(
+          query: _searchController.text,
+          topK: BigInt.from(10),
+          enableSnippet: true,
+        );
+      }
 
       setState(() {
         _searchResults = response.results;
@@ -180,7 +214,8 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
 
       if (doc != null) {
         setState(() {
-          _statusMessage = 'Found: ${doc.text}';
+          _statusMessage =
+              'Found [${doc.id}]: ${doc.title != null ? "${doc.title} - " : ""}${doc.text}';
         });
       } else {
         setState(() {
@@ -204,6 +239,7 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
 
     try {
       await deleteDocument(id: _idController.text);
+      _updateDocCount();
 
       setState(() {
         _statusMessage = 'Document deleted: ${_idController.text}';
@@ -217,9 +253,25 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
     }
   }
 
+  Future<void> _clearAllDocuments() async {
+    try {
+      await deleteAllDocuments();
+      _updateDocCount();
+      setState(() {
+        _searchResults = [];
+        _statusMessage = 'All documents deleted from index';
+      });
+    } catch (e) {
+      setState(() {
+        _statusMessage = 'Clear error: $e';
+      });
+    }
+  }
+
   @override
   void dispose() {
     _idController.dispose();
+    _titleController.dispose();
     _textController.dispose();
     _searchController.dispose();
     super.dispose();
@@ -230,6 +282,17 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Flutter Tantivy Demo'),
+        actions: [
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: Chip(
+                avatar: const Icon(Icons.storage, size: 16),
+                label: Text('Docs: $_totalDocCount'),
+              ),
+            ),
+          ),
+        ],
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
       body: !_isInitialized
@@ -241,76 +304,117 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
                 children: [
                   // Status Message
                   Card(
-                    color: Colors.blue.shade50,
+                    color: Colors.deepPurple.shade50,
                     child: Padding(
                       padding: const EdgeInsets.all(12),
                       child: Text(
                         _statusMessage,
-                        style: const TextStyle(fontWeight: FontWeight.w500),
+                        style: TextStyle(
+                          color: Colors.deepPurple.shade900,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
 
-                  // Add Sample Documents
-                  ElevatedButton.icon(
-                    onPressed: _addSampleDocuments,
-                    icon: const Icon(Icons.auto_awesome),
-                    label: const Text('Add Sample Documents'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.all(16),
-                    ),
+                  // Actions & Samples
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _addSampleDocuments,
+                          icon: const Icon(Icons.auto_awesome),
+                          label: const Text('Add Samples (EN + CJK)'),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.all(14),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        onPressed: _clearAllDocuments,
+                        icon: const Icon(Icons.delete_sweep),
+                        label: const Text('Clear All'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red,
+                          padding: const EdgeInsets.all(14),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 20),
 
-                  // Document ID Input
-                  TextField(
-                    controller: _idController,
-                    decoration: const InputDecoration(
-                      labelText: 'Document ID',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.key),
-                    ),
+                  // Input Form
+                  const Text(
+                    'Manage Document',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
 
-                  // Document Text Input
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 1,
+                        child: TextField(
+                          controller: _idController,
+                          decoration: const InputDecoration(
+                            labelText: 'ID *',
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        flex: 2,
+                        child: TextField(
+                          controller: _titleController,
+                          decoration: const InputDecoration(
+                            labelText: 'Title (Optional)',
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
                   TextField(
                     controller: _textController,
-                    maxLines: 3,
+                    maxLines: 2,
                     decoration: const InputDecoration(
-                      labelText: 'Document Text',
+                      labelText: 'Text Content *',
                       border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.text_fields),
+                      isDense: true,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
 
-                  // CRUD Buttons
                   Row(
                     children: [
                       Expanded(
                         child: ElevatedButton(
                           onPressed: _addDocument,
-                          child: const Text('Add'),
+                          child: const Text('Add / Update'),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: ElevatedButton(
+                        child: OutlinedButton(
                           onPressed: _getDocumentById,
-                          child: const Text('Get'),
+                          child: const Text('Get by ID'),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: ElevatedButton(
+                        child: OutlinedButton(
                           onPressed: _deleteDocument,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red.shade400,
-                            foregroundColor: Colors.white,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.red,
                           ),
-                          child: const Text('Delete'),
+                          child: const Text('Delete ID'),
                         ),
                       ),
                     ],
@@ -320,19 +424,36 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
                   // Search Section
                   const Divider(),
                   const SizedBox(height: 12),
-                  const Text(
-                    'Search',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Search Index',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      FilterChip(
+                        selected: _useRegexSearch,
+                        label: Text(_useRegexSearch ? 'Regex Mode' : 'Text Mode'),
+                        onSelected: (val) {
+                          setState(() {
+                            _useRegexSearch = val;
+                          });
+                        },
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
 
                   TextField(
                     controller: _searchController,
-                    decoration: const InputDecoration(
-                      labelText: 'Search Query',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.search),
-                      hintText: 'e.g., Flutter OR Rust',
+                    decoration: InputDecoration(
+                      labelText: _useRegexSearch ? 'Regex Pattern' : 'Query',
+                      hintText: _useRegexSearch
+                          ? 'e.g., 플러.* or Rust.*'
+                          : 'e.g., 검색 OR Flutter',
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.search),
                     ),
                     onSubmitted: (_) => _searchDocuments(),
                   ),
@@ -341,18 +462,21 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
                   ElevatedButton.icon(
                     onPressed: _searchDocuments,
                     icon: const Icon(Icons.search),
-                    label: const Text('Search Documents'),
+                    label: Text(
+                      _useRegexSearch ? 'Run Regex Search' : 'Search Documents',
+                    ),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.all(16),
                     ),
                   ),
                   const SizedBox(height: 20),
 
-                  // Search Results
+                  // Results List
                   if (_searchResults.isNotEmpty) ...[
-                    const Text(
-                      'Search Results:',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    Text(
+                      'Results (${_searchResults.length}):',
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 8),
                     ListView.builder(
@@ -370,7 +494,7 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
                             title: Text(
                               result.doc.title != null &&
                                       result.doc.title!.isNotEmpty
-                                  ? '[ID: ${result.doc.id}] ${result.doc.title}'
+                                  ? '[${result.doc.id}] ${result.doc.title}'
                                   : 'ID: ${result.doc.id}',
                               style:
                                   const TextStyle(fontWeight: FontWeight.bold),
