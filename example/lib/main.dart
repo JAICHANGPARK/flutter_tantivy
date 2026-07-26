@@ -46,7 +46,7 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
   String _statusMessage = 'Ready';
   bool _isInitialized = false;
   bool _useRegexSearch = false;
-  String _tokenizerType = 'cjk';
+  final String _tokenizerType = 'cjk';
   BigInt _totalDocCount = BigInt.zero;
 
   @override
@@ -68,7 +68,7 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
 
       setState(() {
         _statusMessage =
-            'Tantivy initialized ($dirPath: $indexPath, Tokenizer: $_tokenizerType)';
+            'Tantivy initialized (Path: $indexPath, Tokenizer: $_tokenizerType)';
         _isInitialized = true;
       });
     } catch (e) {
