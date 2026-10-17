@@ -59,3 +59,14 @@ flutter drive --driver=test_driver/integration_test.dart --target=integration_te
 ### Dependencies
 
 The project's dependencies are managed by `pub` for the Dart part and `cargo` for the Rust part. The Dart dependencies are listed in `pubspec.yaml`, and the Rust dependencies are in `rust/Cargo.toml`.
+
+## AI Agent Skill (`flutter-tantivy`)
+
+This repository includes a pre-configured AI Agent Skill for `flutter_tantivy`:
+
+- **Workspace Skill (Auto-discovered by Antigravity / Gemini CLI)**: [`.agents/skills/flutter-tantivy/SKILL.md`](./.agents/skills/flutter-tantivy/SKILL.md) (linked to [`skills/flutter-tantivy/SKILL.md`](./skills/flutter-tantivy/SKILL.md))
+- **API Reference**: [`skills/flutter-tantivy/references/api-reference.md`](./skills/flutter-tantivy/references/api-reference.md)
+- **Example Repository Pattern**: [`skills/flutter-tantivy/examples/search_repository.dart`](./skills/flutter-tantivy/examples/search_repository.dart)
+
+Whenever assisting with `flutter_tantivy` usage, search implementation, or tokenizer configuration, read `skills/flutter-tantivy/SKILL.md` first.
+

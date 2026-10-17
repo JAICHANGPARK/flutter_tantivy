@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2026.10.17] - 2026-10-17
+
+### Added
+- **Fuzzy Search (`searchDocumentsFuzzy`)**: Added typo-tolerant search powered by Tantivy's `FuzzyTermQuery` and Levenshtein automaton (`#3136`), supporting configurable edit distance (`0..=2`), transposition cost, and prefix mode across `title` and `text` fields.
+- **Regex Phrase Search (`searchDocumentsRegexPhrase`)**: Ported Tantivy's `RegexPhraseQuery` enhancements (`#3135`, `#3137`, `#3138`) to search sequences of regex patterns in order with configurable proximity `slop` and `maxExpansions`.
+- **More-Like-This Similar Document Search (`searchSimilarDocuments`)**: Added `MoreLikeThisQuery` support to find documents similar to a reference document ID with customizable document frequency, term frequency, word length bounds, and boost factor.
+- **Exists Query & `field:*` Syntax (`searchDocumentsExists`)**: Ported Tantivy's `ExistsQuery` and query parser `field:*` syntax (`#2974`, `#3068`) with fast-field columnar storage enabled by default on `id`, `title`, and `text`.
+- **Lenient Query Parsing (`searchDocumentsLenient`)**: Added `QueryParser::parse_query_lenient` support (`#2905`, `#2960`, `#3100`) returning both matching results and non-fatal syntax warnings (`LenientSearchResponse`), with optional `conjunctionByDefault` (AND mode) and `titleBoost`.
+- **Term Dictionary Prefix Suggestions (`suggestTerms`)**: Ported FST/SSTable term dictionary range streaming (`#3155`) to provide prefix autocomplete suggestions and document frequency counts (`TermSuggestion`).
+- **Snippet Fragment Byte Range & Highlight Ranges (`fragmentRange`, `highlightedRanges`, `titleSnippet`)**: Ported Tantivy `#3134` (`Snippet::fragment_range`) and `Snippet::highlighted` to `SearchResult`, plus optional highlighted `titleSnippet`.
+- **Index Space Usage & Segment File Listing (`getIndexSpaceUsage`, `listIndexSegmentFiles`)**: Ported `Searcher::space_usage()` (`IndexSpaceUsage`) and `IndexMeta::list_segment_files()` (`#3080`) for inspecting storage breakdown and active segment files.
+- **Multi-Language Stemmer & Extended Tokenizers**: Added support for `"whitespace"`, `"raw"`, and 18-language stemming (`"en_stem"` / `"stemmer"` / `"stem:<language>"` for English, French, German, Spanish, Italian, Portuguese, Russian, Arabic, Danish, Dutch, Finnish, Greek, Hungarian, Norwegian, Romanian, Swedish, Tamil, Turkish) alongside `"default"` and `"cjk"` / `"ngram"`.
+- **AI Agent Skills (`skills/flutter-tantivy`)**: Added AI agent skill definitions (`SKILL.md`, `references/api-reference.md`, `examples/search_repository.dart`), auto-discovery links for **Claude Code** (`.claude/skills/flutter-tantivy`, `CLAUDE.md`), **OpenAI Codex** (`.agents/skills/flutter-tantivy`, `.codex/skills/flutter-tantivy`, `AGENTS.md`), and **Gemini CLI / Google Antigravity** (`.agents/skills/flutter-tantivy`, `GEMINI.md`), plus a usage guide in `README.md`.
+
+### Changed
+- **Tantivy Upgrade**: Upgraded Tantivy engine from `0.26.1` to **`0.26.2`** (includes aggregation count overflow fixes, nested aggregation buffer flush fixes `#2992`, and buffered union `seek_danger` safety fixes `#3086`).
+- **Flutter SDK & Package Dependencies Upgrade**: Upgraded minimum SDK constraints (`sdk: ^3.13.5`, `flutter: '>=3.47.0'`), `flutter_rust_bridge` to **`2.13.0`**, `ffi` to `^2.2.0`, `ffigen` to `^23.0.0`, `cupertino_icons` to `^2.0.0`, and `path_provider` to `^2.1.6`.
+- **Tokenizer Registration & Re-initialization**: Automatically registers all built-in and custom tokenizers when opening existing indexes and supports re-initializing `initTantivy` when `dirPath` or `tokenizerType` changes.
+
+---
+
 ## [2026.7.26] - 2026-07-26
 
 ### Added

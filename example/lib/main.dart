@@ -29,6 +29,8 @@ class MyApp extends StatelessWidget {
   }
 }
 
+enum SearchMode { text, lenient, fuzzy, regex, regexPhrase }
+
 class TantivyDemoPage extends StatefulWidget {
   const TantivyDemoPage({super.key});
 
@@ -43,11 +45,13 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
   final TextEditingController _searchController = TextEditingController();
 
   List<SearchResult> _searchResults = [];
+  List<TermSuggestion> _suggestions = [];
   String _statusMessage = 'Ready';
   bool _isInitialized = false;
-  bool _useRegexSearch = false;
+  SearchMode _searchMode = SearchMode.text;
   final String _tokenizerType = 'cjk';
   BigInt _totalDocCount = BigInt.zero;
+  IndexSpaceUsage? _spaceUsage;
 
   @override
   void initState() {
@@ -64,11 +68,11 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
 
       // Initialize Tantivy with CJK / N-gram tokenizer support by default
       initTantivy(dirPath: indexPath, tokenizerType: _tokenizerType);
-      _updateDocCount();
+      _updateIndexStats();
 
       setState(() {
         _statusMessage =
-            'Tantivy initialized (Path: $indexPath, Tokenizer: $_tokenizerType)';
+            'Tantivy 0.26.2 initialized (Path: $indexPath, Tokenizer: $_tokenizerType)';
         _isInitialized = true;
       });
     } catch (e) {
@@ -78,11 +82,32 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
     }
   }
 
-  void _updateDocCount() {
+  void _updateIndexStats() {
     try {
       final count = getNumDocs();
+      final usage = getIndexSpaceUsage();
       setState(() {
         _totalDocCount = count;
+        _spaceUsage = usage;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _updateSuggestions(String prefix) async {
+    if (prefix.trim().isEmpty) {
+      setState(() {
+        _suggestions = [];
+      });
+      return;
+    }
+    try {
+      final items = await suggestTerms(
+        prefix: prefix,
+        limit: BigInt.from(6),
+        includeTitle: true,
+      );
+      setState(() {
+        _suggestions = items;
       });
     } catch (_) {}
   }
@@ -103,7 +128,7 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
       );
 
       await addDocument(doc: doc);
-      _updateDocCount();
+      _updateIndexStats();
 
       setState(() {
         _statusMessage = 'Document added: [${doc.id}]';
@@ -152,10 +177,11 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
       ];
 
       await addDocumentsBatch(docs: sampleDocs);
-      _updateDocCount();
+      _updateIndexStats();
 
       setState(() {
-        _statusMessage = 'Added ${sampleDocs.length} sample documents (English & CJK)';
+        _statusMessage =
+            'Added ${sampleDocs.length} sample documents (English & CJK)';
       });
     } catch (e) {
       setState(() {
@@ -165,38 +191,113 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
   }
 
   Future<void> _searchDocuments() async {
-    if (_searchController.text.isEmpty) {
+    final queryText = _searchController.text.trim();
+    if (queryText.isEmpty) {
       setState(() {
-        _statusMessage = 'Please enter search query or regex pattern';
+        _statusMessage = 'Please enter a search query or pattern';
       });
       return;
     }
 
     try {
-      final SearchResponse response;
-      if (_useRegexSearch) {
-        response = await searchDocumentsRegex(
-          pattern: _searchController.text,
-          topK: BigInt.from(10),
-          enableSnippet: true,
-        );
-      } else {
-        response = await searchDocuments(
-          query: _searchController.text,
-          topK: BigInt.from(10),
-          enableSnippet: true,
-        );
+      switch (_searchMode) {
+        case SearchMode.text:
+          final response = await searchDocuments(
+            query: queryText,
+            topK: BigInt.from(10),
+            enableSnippet: true,
+          );
+          setState(() {
+            _searchResults = response.results;
+            _statusMessage =
+                'Found ${response.results.length} (Total matching: ${response.totalHits})';
+          });
+          break;
+        case SearchMode.lenient:
+          final response = await searchDocumentsLenient(
+            query: queryText,
+            topK: BigInt.from(10),
+            enableSnippet: true,
+            titleBoost: 2.0,
+          );
+          final warnMsg = response.errors.isNotEmpty
+              ? ' [Warnings: ${response.errors.length}]'
+              : '';
+          setState(() {
+            _searchResults = response.results;
+            _statusMessage =
+                'Lenient: ${response.results.length} (Total: ${response.totalHits})$warnMsg';
+          });
+          break;
+        case SearchMode.fuzzy:
+          final response = await searchDocumentsFuzzy(
+            term: queryText,
+            distance: 1,
+            transpositionCostOne: true,
+            prefix: true,
+            topK: BigInt.from(10),
+            enableSnippet: true,
+          );
+          setState(() {
+            _searchResults = response.results;
+            _statusMessage =
+                'Fuzzy matches: ${response.results.length} (Total: ${response.totalHits})';
+          });
+          break;
+        case SearchMode.regex:
+          final response = await searchDocumentsRegex(
+            pattern: queryText,
+            topK: BigInt.from(10),
+            enableSnippet: true,
+          );
+          setState(() {
+            _searchResults = response.results;
+            _statusMessage =
+                'Regex matches: ${response.results.length} (Total: ${response.totalHits})';
+          });
+          break;
+        case SearchMode.regexPhrase:
+          final patterns = queryText
+              .split(RegExp(r'\s+'))
+              .where((s) => s.isNotEmpty)
+              .toList();
+          final response = await searchDocumentsRegexPhrase(
+            patterns: patterns,
+            slop: 2,
+            topK: BigInt.from(10),
+            enableSnippet: true,
+          );
+          setState(() {
+            _searchResults = response.results;
+            _statusMessage =
+                'Regex Phrase matches: ${response.results.length} (Total: ${response.totalHits})';
+          });
+          break;
       }
-
-      setState(() {
-        _searchResults = response.results;
-        _statusMessage =
-            'Found ${response.results.length} (Total matching: ${response.totalHits})';
-      });
     } catch (e) {
       setState(() {
         _statusMessage = 'Search error: $e';
         _searchResults = [];
+      });
+    }
+  }
+
+  Future<void> _findSimilarDocuments(String docId) async {
+    try {
+      final response = await searchSimilarDocuments(
+        id: docId,
+        topK: BigInt.from(5),
+        minDocFrequency: BigInt.from(1),
+        minTermFrequency: BigInt.from(1),
+      );
+      setState(() {
+        _searchResults = response.results;
+        _statusMessage =
+            'Similar to [$docId]: Found ${response.results.length} documents';
+      });
+    } catch (e) {
+      setState(() {
+        _statusMessage = 'Similar search error: $e';
       });
     }
   }
@@ -239,7 +340,7 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
 
     try {
       await deleteDocument(id: _idController.text);
-      _updateDocCount();
+      _updateIndexStats();
 
       setState(() {
         _statusMessage = 'Document deleted: ${_idController.text}';
@@ -256,9 +357,10 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
   Future<void> _clearAllDocuments() async {
     try {
       await deleteAllDocuments();
-      _updateDocCount();
+      _updateIndexStats();
       setState(() {
         _searchResults = [];
+        _suggestions = [];
         _statusMessage = 'All documents deleted from index';
       });
     } catch (e) {
@@ -279,16 +381,20 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
 
   @override
   Widget build(BuildContext context) {
+    final kbUsed = _spaceUsage != null
+        ? (_spaceUsage!.totalBytes.toDouble() / 1024.0).toStringAsFixed(1)
+        : '0.0';
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Flutter Tantivy Demo'),
         actions: [
           Center(
             child: Padding(
-              padding: const EdgeInsets.only(right: 16),
+              padding: const EdgeInsets.only(right: 12),
               child: Chip(
                 avatar: const Icon(Icons.storage, size: 16),
-                label: Text('Docs: $_totalDocCount'),
+                label: Text('Docs: $_totalDocCount ($kbUsed KB)'),
               ),
             ),
           ),
@@ -425,21 +531,45 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
                   const Divider(),
                   const SizedBox(height: 12),
 
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  const Text(
+                    'Search Index',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
                     children: [
-                      const Text(
-                        'Search Index',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ChoiceChip(
+                        label: const Text('Text / Exists (title:*)'),
+                        selected: _searchMode == SearchMode.text,
+                        onSelected: (_) =>
+                            setState(() => _searchMode = SearchMode.text),
                       ),
-                      FilterChip(
-                        selected: _useRegexSearch,
-                        label: Text(_useRegexSearch ? 'Regex Mode' : 'Text Mode'),
-                        onSelected: (val) {
-                          setState(() {
-                            _useRegexSearch = val;
-                          });
-                        },
+                      ChoiceChip(
+                        label: const Text('Lenient'),
+                        selected: _searchMode == SearchMode.lenient,
+                        onSelected: (_) =>
+                            setState(() => _searchMode = SearchMode.lenient),
+                      ),
+                      ChoiceChip(
+                        label: const Text('Fuzzy (Typo)'),
+                        selected: _searchMode == SearchMode.fuzzy,
+                        onSelected: (_) =>
+                            setState(() => _searchMode = SearchMode.fuzzy),
+                      ),
+                      ChoiceChip(
+                        label: const Text('Regex'),
+                        selected: _searchMode == SearchMode.regex,
+                        onSelected: (_) =>
+                            setState(() => _searchMode = SearchMode.regex),
+                      ),
+                      ChoiceChip(
+                        label: const Text('Regex Phrase'),
+                        selected: _searchMode == SearchMode.regexPhrase,
+                        onSelected: (_) => setState(
+                            () => _searchMode = SearchMode.regexPhrase),
                       ),
                     ],
                   ),
@@ -448,23 +578,43 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
                   TextField(
                     controller: _searchController,
                     decoration: InputDecoration(
-                      labelText: _useRegexSearch ? 'Regex Pattern' : 'Query',
-                      hintText: _useRegexSearch
+                      labelText: 'Search Query (${_searchMode.name})',
+                      hintText: _searchMode == SearchMode.regex
                           ? 'e.g., 플러.* or Rust.*'
-                          : 'e.g., 검색 OR Flutter',
+                          : _searchMode == SearchMode.fuzzy
+                              ? 'e.g., Fluter (typo-tolerant)'
+                              : 'e.g., 검색 OR Flutter OR title:*',
                       border: const OutlineInputBorder(),
                       prefixIcon: const Icon(Icons.search),
                     ),
+                    onChanged: _updateSuggestions,
                     onSubmitted: (_) => _searchDocuments(),
                   ),
+
+                  if (_suggestions.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      children: _suggestions
+                          .map(
+                            (s) => ActionChip(
+                              label: Text('${s.term} (${s.docFreq})'),
+                              onPressed: () {
+                                _searchController.text = s.term;
+                                _searchDocuments();
+                              },
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ],
+
                   const SizedBox(height: 12),
 
                   ElevatedButton.icon(
                     onPressed: _searchDocuments,
                     icon: const Icon(Icons.search),
-                    label: Text(
-                      _useRegexSearch ? 'Run Regex Search' : 'Search Documents',
-                    ),
+                    label: Text('Search (${_searchMode.name.toUpperCase()})'),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.all(16),
                     ),
@@ -499,6 +649,12 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
                               style:
                                   const TextStyle(fontWeight: FontWeight.bold),
                             ),
+                            trailing: IconButton(
+                              tooltip: 'Find Similar Documents (MoreLikeThis)',
+                              icon: const Icon(Icons.hub_outlined),
+                              onPressed: () =>
+                                  _findSimilarDocuments(result.doc.id),
+                            ),
                             subtitle: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -512,6 +668,16 @@ class _TantivyDemoPageState extends State<TantivyDemoPage> {
                                     style: TextStyle(
                                       color: Colors.purple.shade700,
                                       fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                ],
+                                if (result.fragmentRange != null) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Fragment byte range: ${result.fragmentRange!.start}..${result.fragmentRange!.end}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade700,
                                     ),
                                   ),
                                 ],
